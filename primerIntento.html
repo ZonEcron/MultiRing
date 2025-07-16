@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>WebSocket Bridge</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 1rem;
+        }
+
+        label,
+        input,
+        button,
+        div {
+            margin: 0.5rem 0;
+        }
+
+        .cloud-conn {
+            margin-bottom: 1rem;
+            border: 1px solid #ccc;
+            padding: 0.5rem;
+            border-radius: 5px;
+        }
+
+        .inline {
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>Servidor Local</h2>
+    <label for="localAddress">IP:Puerto</label>
+    <input id="localAddress" type="text" placeholder="192.168.1.100:9000" />
+    <button onclick="connectLocal()">Conectar Local</button>
+    <span id="localStatus">Desconectado</span>
+
+    <h2>Servidores en la Nube</h2>
+    <input id="cloudBase" type="text" placeholder="flowagility.com" />
+    <button onclick="addCloudServer()">Añadir Servidor</button>
+    <div id="cloudContainer"></div>
+
+    <script>
+        let localSocket = null;
+        const cloudSockets = new Map(); // Map<mac, WebSocket>
+
+        function randomMAC() {
+            return 'xx:xx:xx:xx:xx:xx'.replace(/x/g, () =>
+                Math.floor(Math.random() * 16).toString(16)
+            );
+        }
+
+        function connectLocal() {
+            const address = document.getElementById('localAddress').value;
+            if (!address) return alert('Introduce IP:Puerto');
+            const url = `ws://${address}`;
+            if (localSocket && localSocket.readyState <= 1) {
+                localSocket.close();
+                document.getElementById('localStatus').textContent = 'Desconectado';
+                return;
+            }
+
+            localSocket = new WebSocket(url);
+            document.getElementById('localStatus').textContent = 'Conectando...';
+
+            localSocket.onopen = () => {
+                document.getElementById('localStatus').textContent = 'Conectado';
+            };
+
+            localSocket.onclose = () => {
+                document.getElementById('localStatus').textContent = 'Desconectado';
+            };
+
+            localSocket.onerror = () => {
+                document.getElementById('localStatus').textContent = 'Error';
+            };
+
+            localSocket.onmessage = (event) => {
+                for (const [_, socket] of cloudSockets) {
+                    if (socket.readyState === WebSocket.OPEN) {
+                        socket.send(event.data);
+                    }
+                }
+            };
+        }
+
+        function addCloudServer() {
+            const base = document.getElementById('cloudBase').value.trim();
+            if (!base) return alert('Introduce una URL base de la nube');
+
+            const mac = randomMAC().replace(/:/g, '');
+            const fullURL = `wss://${base}/${mac}`;
+
+            const container = document.createElement('div');
+            container.className = 'cloud-conn';
+
+            const macLabel = document.createElement('label');
+            macLabel.className = 'inline';
+            macLabel.textContent = mac;
+
+            const urlLabel = document.createElement('label');
+            urlLabel.className = 'inline';
+            urlLabel.textContent = fullURL;
+
+            const statusLabel = document.createElement('label');
+            statusLabel.className = 'inline';
+            statusLabel.textContent = 'Desconectado';
+
+            const toggleButton = document.createElement('button');
+            toggleButton.textContent = 'Conectar';
+            toggleButton.onclick = () => {
+                if (cloudSockets.has(mac)) {
+                    const socket = cloudSockets.get(mac);
+                    socket.close();
+                    cloudSockets.delete(mac);
+                    toggleButton.textContent = 'Conectar';
+                    statusLabel.textContent = 'Desconectado';
+                } else {
+                    const socket = new WebSocket(fullURL);
+                    cloudSockets.set(mac, socket);
+                    toggleButton.textContent = 'Desconectando...';
+                    statusLabel.textContent = 'Conectando...';
+
+                    socket.onopen = () => {
+                        toggleButton.textContent = 'Desconectar';
+                        statusLabel.textContent = 'Conectado';
+                    };
+
+                    socket.onclose = () => {
+                        cloudSockets.delete(mac);
+                        toggleButton.textContent = 'Conectar';
+                        statusLabel.textContent = 'Desconectado';
+                    };
+
+                    socket.onerror = () => {
+                        statusLabel.textContent = 'Error';
+                    };
+
+                    socket.onmessage = (event) => {
+                        if (localSocket && localSocket.readyState === WebSocket.OPEN) {
+                            localSocket.send(event.data);
+                        }
+                    };
+                }
+            };
+
+            container.appendChild(macLabel);
+            container.appendChild(urlLabel);
+            container.appendChild(toggleButton);
+            container.appendChild(statusLabel);
+
+            document.getElementById('cloudContainer').appendChild(container);
+        }
+    </script>
+
+</body>
+
+</html>
