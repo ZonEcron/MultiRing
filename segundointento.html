@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Relay WebSocket</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        .status {
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .conectado {
+            color: green;
+        }
+
+        .desconectado {
+            color: red;
+        }
+
+        .linea {
+            margin: 5px;
+            padding: 5px;
+        }
+
+        input[type="text"] {
+            width: 250px;
+        }
+
+        .seccion {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Sección 1: Servidor local -->
+    <div class="seccion">
+        <h3>Conexion al crono</h3>
+        <div class="linea">
+            <input type="text" id="localUrl" placeholder="IP o dominio:puerto (ws://...)" />
+            <button id="toggleLocal">Conectar</button>
+            <span id="estadoLocal" class="status desconectado">Desconectado</span>
+        </div>
+    </div>
+
+    <!-- Sección 2: URL base de la nube -->
+    <div class="seccion">
+        <h3>Conexion a multiples rings</h3>
+        <div class="linea">
+            <label for="baseNube">URL base de la nube:</label>
+            <input type="text" id="baseNube" placeholder="flowagility.com" />
+        </div>
+    </div>
+
+    <!-- Sección 3: Servidores de la nube -->
+    <div class="seccion">
+        <button id="addNube">Añadir servidor nube</button>
+        <table id="nubeLista"></table>
+    </div>
+
+    <script>
+        const localInput = document.getElementById("localUrl");
+        const toggleLocalBtn = document.getElementById("toggleLocal");
+        const estadoLocal = document.getElementById("estadoLocal");
+
+        const baseNubeInput = document.getElementById("baseNube");
+        const addNubeBtn = document.getElementById("addNube");
+        const nubeLista = document.getElementById("nubeLista");
+
+        let localSocket = null;
+        let nubeSockets = [];
+
+        function actualizarEstado(label, conectado) {
+            label.textContent = conectado ? "Conectado" : "Desconectado";
+            label.className = "status " + (conectado ? "conectado" : "desconectado");
+        }
+
+        function toggleConexionLocal() {
+            if (localSocket && localSocket.readyState === WebSocket.OPEN) {
+                localSocket.close();
+            } else {
+                try {
+                    localSocket = new WebSocket(`ws://${localInput.value}`);
+                    localSocket.onopen = () => {
+                        toggleLocalBtn.textContent = "Desconectar";
+                        actualizarEstado(estadoLocal, true);
+                    };
+                    localSocket.onclose = () => {
+                        toggleLocalBtn.textContent = "Conectar";
+                        actualizarEstado(estadoLocal, false);
+                    };
+                    localSocket.onmessage = (event) => {
+                        nubeSockets.forEach(obj => {
+                            if (obj.socket.readyState === WebSocket.OPEN) {
+                                obj.socket.send(event.data);
+                            }
+                        });
+                    };
+                } catch (e) {
+                    console.error("Error al conectar al servidor local:", e);
+                }
+            }
+        }
+
+        function generarMAC() {
+            return 'xx:xx:xx:xx:xx:xx'.replace(/x/g, () =>
+                Math.floor(Math.random() * 16).toString(16).toUpperCase()
+            );
+        }
+
+        function añadirServidorNube() {
+            const mac = generarMAC().replace(/:/g, '');
+            const base = baseNubeInput.value.trim();
+            if (!base) return alert("Introduce una URL base válida");
+            const fullUrl = `wss://${base}/${mac}`;
+
+            const socketObj = {
+                mac,
+                socket: null,
+                conectado: false,
+                labelEstado: null,
+                btn: null
+            };
+
+            const fila = document.createElement("tr");
+            fila.className = "linea";
+
+            const macCelda = document.createElement("td");
+            const macLabel = document.createElement("span");
+            macLabel.textContent = mac;
+
+            const urlCelda = document.createElement("td");
+            const urlLabel = document.createElement("span");
+            urlLabel.textContent = fullUrl;
+
+            const btnCelda = document.createElement("td");
+            const btn = document.createElement("button");
+            btn.textContent = "Conectar";
+
+            const estadoCelda = document.createElement("td");
+            const estado = document.createElement("span");
+            estado.className = "status desconectado";
+            estado.textContent = "Desconectado";
+
+            btn.onclick = () => {
+                if (socketObj.socket && socketObj.socket.readyState === WebSocket.OPEN) {
+                    socketObj.socket.close();
+                } else {
+                    try {
+                        const sock = new WebSocket(fullUrl);
+                        socketObj.socket = sock;
+                        sock.onopen = () => {
+                            btn.textContent = "Desconectar";
+                            actualizarEstado(estado, true);
+                        };
+                        sock.onclose = () => {
+                            btn.textContent = "Conectar";
+                            actualizarEstado(estado, false);
+                        };
+                        sock.onmessage = (event) => {
+                            if (localSocket && localSocket.readyState === WebSocket.OPEN) {
+                                localSocket.send(event.data);
+                            }
+                        };
+                    } catch (e) {
+                        console.error("Error al conectar a la nube:", e);
+                    }
+                }
+            };
+
+            socketObj.labelEstado = estado;
+            socketObj.btn = btn;
+
+            fila.appendChild(macCelda);
+            macCelda.appendChild(macLabel);
+
+            fila.appendChild(urlCelda);
+            urlCelda.appendChild(urlLabel);
+
+            fila.appendChild(btnCelda);
+            btnCelda.appendChild(btn);
+
+            fila.appendChild(estadoCelda);
+            estadoCelda.appendChild(estado);
+
+            nubeLista.appendChild(fila);
+            nubeSockets.push(socketObj);
+        }
+
+        toggleLocalBtn.onclick = toggleConexionLocal;
+        addNubeBtn.onclick = añadirServidorNube;
+    </script>
+</body>
+
+</html>

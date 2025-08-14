@@ -1,0 +1,29 @@
+.status {
+    font-weight: bold;
+    margin-left: 10px;
+}
+
+.conectado {
+    color: green;
+}
+
+.desconectado {
+    color: red;
+}
+
+input[type="text"] {
+    width: 100%;
+}
+
+#nubeLista {
+    width: 1000px;
+}
+
+#nubeLista td {
+    padding: 8px;
+    vertical-align: middle;
+}
+
+.linea {
+    margin-top: 10px;
+}
