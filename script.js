@@ -29,8 +29,10 @@
                         actualizarEstado(estadoLocal, false);
                     };
                     localSocket.onmessage = (event) => {
+                        console.log(`Recibido del crono: ${event.data}`)
                         nubeSockets.forEach(obj => {
                             if (obj.socket.readyState === WebSocket.OPEN) {
+                                console.log(`Enviando a Ring: ${event.data}`)
                                 obj.socket.send(event.data);
                             }
                         });
@@ -99,6 +101,7 @@
                             actualizarEstado(estado, false);
                         };
                         sock.onmessage = (event) => {
+                        console.log(`Recibido del Ring: ${event.data}`)
                             if (localSocket && localSocket.readyState === WebSocket.OPEN) {
                                 localSocket.send(event.data);
                             }
